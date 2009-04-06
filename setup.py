@@ -26,12 +26,32 @@ class test(Command):
         for test in self.tests:
             spawn([sys.executable, '-m', test], search_path=False)
 
+LONG_DESCRIPTION = """cygwinreg is a direct Cygwin port of Python's winreg.
+
+This is because _winreg or winreg modules don't exist in the Cygwin
+Python port.  But often, it is useful to have Python programs running
+in Cygwin read and write to the Windows registry.
+"""
+
 setup(name='cygwinreg',
       version='1.0',
-      description='Windows registry access for Cygwin',
+      description='Windows registry access for the Cygwin toolkit',
+      long_description=LONG_DESCRIPTION,
       author='Simon Law',
       author_email='sfllaw@sfllaw.ca',
-      url='http://sfllaw.ca/~sfllaw/programs/cygwinreg',
+      url='http://hg.akoha.com/python-cygwinreg/',
+      license='Python Software Foundation License',
+      platforms=['Cygwin'],
+      classifiers=[
+        'Development Status :: 5 - Production/Stable',
+        'Environment :: Win32 (MS Windows)',
+        'Intended Audience :: Developers',
+        'License :: OSI Approved :: Python Software Foundation License',
+        'Operating System :: Microsoft :: Windows',
+        'Operating System :: POSIX :: Other',
+        'Programming Language :: Python',
+        'Topic :: Software Development',
+        ],
       py_modules=['cygwinreg.constants', 'cygwinreg.w32api'],
       cmdclass={'test': test},
       )
