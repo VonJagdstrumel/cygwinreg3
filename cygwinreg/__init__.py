@@ -107,12 +107,8 @@ class PyHKEY(object):
         if self.hkey:
             try:
                 self.Close()
-            except WindowsError, e:
-                if e.winerror == 6:
-                    # The handle is invalid, but that's OK
-                    pass
-                else:
-                    raise
+            except:
+                pass
 
     def Close(self):
         """key.Close() - Closes the underlying Windows handle.
