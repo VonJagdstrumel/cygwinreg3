@@ -7,32 +7,31 @@
 #
 # It is based on Python's PC/_winreg.c.
 #
-# cygwinreg/w32api.py
+# cygwinreg3/w32api.py
 #
 # This module provides hooks into the Windows libraries for manipulating
 # the registry.
 
-import exceptions
 from locale import getpreferredencoding
 import re
 from struct import pack, unpack_from
 
-from cygwinreg.constants import *
+from cygwinreg3.constants import *
 
-from ctypes import (addressof, byref, cast, pointer, POINTER, sizeof, Structure,
+from ctypes import (byref, cast, POINTER, sizeof, Structure,
                     create_string_buffer,
-                    c_char_p, c_long, c_ulong, c_ushort, c_void_p, c_wchar_p)
+                    c_char_p, c_int, c_ulong, c_uint, c_void_p, c_wchar_p, c_longlong)
 
 PCVOID = c_void_p
-WORD = c_ushort
-DWORD = c_ulong
+LPCVOID = PCVOID
+DWORD = c_uint
 PDWORD = POINTER(DWORD)
 LPDWORD = PDWORD
-LONG = c_long
+QWORD = c_longlong
+LONG = c_int
 PLONG = POINTER(LONG)
 PBYTE = c_char_p
 LPBYTE = PBYTE
-LPSTR = c_char_p
 LPWSTR = c_wchar_p
 LPCWSTR = LPWSTR
 HANDLE = c_ulong # in the header files: void *
@@ -48,11 +47,14 @@ PFILETIME = POINTER(FILETIME)
 
 from ctypes import cdll
 
-# WINBASEAPI DWORD WINAPI FormatMessageW(DWORD,PCVOID,DWORD,DWORD,LPWSTR,DWORD,
+cdll.kernel32 = cdll.LoadLibrary('kernel32.dll')
+cdll.advapi32 = cdll.LoadLibrary('advapi32.dll')
+
+# WINBASEAPI DWORD WINAPI FormatMessageW(DWORD,LPCVOID,DWORD,DWORD,LPWSTR,DWORD,
 #                                        va_list*)
 FormatMessageW = cdll.kernel32.FormatMessageW
 FormatMessageW.restype = DWORD
-FormatMessageW.argtypes = [DWORD, PCVOID, DWORD, DWORD, PCVOID, DWORD,
+FormatMessageW.argtypes = [DWORD, LPCVOID, DWORD, DWORD, PCVOID, DWORD,
                            c_void_p]
 
 # WINBASEAPI DWORD WINAPI GetLastError(void);
@@ -95,7 +97,7 @@ RegDeleteValueW.argtypes = [HKEY, LPCWSTR]
 RegEnumKeyExW = cdll.advapi32.RegEnumKeyExW
 RegEnumKeyExW.restype = LONG
 RegEnumKeyExW.argtypes = [HKEY, DWORD, LPWSTR, PDWORD, PDWORD, LPWSTR,
-                          PDWORD, c_void_p]
+                          PDWORD, PFILETIME]
 
 # WINADVAPI LONG WINAPI RegQueryInfoKeyW(HKEY,LPWSTR,PDWORD,PDWORD,PDWORD,
 #                                        PDWORD,PDWORD,PDWORD,PDWORD,PDWORD,
@@ -238,7 +240,7 @@ def winerror_to_strerror(winerror):
          FORMAT_MESSAGE_FROM_SYSTEM |
          FORMAT_MESSAGE_IGNORE_INSERTS),
         None,                   # no message source 
-        c_ulong(winerror),
+        DWORD(winerror),
         LANG_NEUTRAL,           # Default language
         byref(buf),
         0,                      # size not used
@@ -253,8 +255,8 @@ def winerror_to_strerror(winerror):
     return re.sub(r'[\s.]*$', '', result)
 
 def wincall(return_code):
-    from cygwinreg.constants import ERROR_SUCCESS
-    if not isinstance(return_code, (int, long)):
+    from cygwinreg3.constants import ERROR_SUCCESS
+    if not isinstance(return_code, int):
         return_code = return_code.value
     if return_code != ERROR_SUCCESS:
         raise WindowsError(return_code)
@@ -280,7 +282,6 @@ class WindowsError(OSError):
                                           repr(self.filename))
         else:
             return "[Error %s] %s" % (self.winerror, self.strerror)
-exceptions.WindowsError = WindowsError
 
 def py_to_reg(value, typ):
     """Convert a Python object to Registry data.
@@ -288,18 +289,23 @@ def py_to_reg(value, typ):
     Returns a ctypes.c_char array.
     """
     def utf16(basestring):
-        if isinstance(basestring, str):
+        if isinstance(basestring, bytes):
             basestring = basestring.decode(getpreferredencoding())
         return basestring.encode('utf-16-le')
 
     exception = ValueError("Could not convert the data to the specified type.")
     if typ == REG_DWORD:
         if value is None:
-            buf = create_string_buffer(pack('L', 0), sizeof(DWORD))
+            buf = create_string_buffer(pack('=L', 0), sizeof(DWORD))
         else:
-            buf = create_string_buffer(pack('L', value), sizeof(DWORD))
+            buf = create_string_buffer(pack('=L', value), sizeof(DWORD))
+    elif typ == REG_QWORD:
+        if value is None:
+            buf = create_string_buffer(pack('=Q', 0), sizeof(QWORD))
+        else:
+            buf = create_string_buffer(pack('=Q', value), sizeof(QWORD))
     elif typ in (REG_SZ, REG_EXPAND_SZ):
-        if not isinstance(value, basestring):
+        if not isinstance(value, (str, bytes)):
             raise ValueError("Value must be a string or a unicode object.")
         if value is None:
             value = u''
@@ -312,7 +318,7 @@ def py_to_reg(value, typ):
         result = []
         count = 0
         for elem in value:
-            if not isinstance(elem, basestring):
+            if not isinstance(elem, (str, bytes)):
                 raise ValueError("Element %d must be a string or a unicode "
                                  "object." % count)
             if elem is None:
@@ -320,7 +326,7 @@ def py_to_reg(value, typ):
             result.append(utf16(elem))
             count += 1
         result.append(utf16(u'')) # Terminate the list with an empty string
-        result = '\x00\x00'.join(result)
+        result = b'\x00\x00'.join(result)
         buf = create_string_buffer(result, len(result))
     else:
         # Handle REG_BINARY and ALSO handle ALL unknown data types
@@ -329,14 +335,12 @@ def py_to_reg(value, typ):
         if value is None:
             buf = create_string_buffer(0)
         try:
-            buf = buffer(value)
-            buf = create_string_buffer(str(buf), len(buf))
+            buf = memoryview(value)
+            buf = create_string_buffer(bytes(buf), len(buf))
         except TypeError:
             raise TypeError("Objects of type '%s' can not be used as "
                             "binary registry values" % type(value))
     return buf
-
-UTF16LE_NULL = re.compile(r'(?<![\x01-\x7f])\x00\x00')
 
 def reg_to_py(data_buf, data_size, typ):
     """Convert Registry data to a Python object."""
@@ -346,8 +350,12 @@ def reg_to_py(data_buf, data_size, typ):
         typ = typ.value
     if typ == REG_DWORD:
         if data_size == 0:
-            return 0L
-        return unpack_from('L', data_buf)[0]
+            return 0
+        return unpack_from('=L', data_buf)[0]
+    elif typ == REG_QWORD:
+        if data_size == 0:
+            return 0
+        return unpack_from('=Q', data_buf)[0]
     elif typ in (REG_SZ, REG_EXPAND_SZ):
         # data_buf may or may not have a trailing NULL in the buffer.
         if data_size % 2:
@@ -355,7 +363,7 @@ def reg_to_py(data_buf, data_size, typ):
         buf = data_buf.raw
         if len(buf) > data_size:
             buf = buf[:data_size]
-        return UTF16LE_NULL.split(buf, 1)[0].decode('utf-16-le')
+        return buf.decode('utf-16-le').split('\0', 1)[0]
     elif typ == REG_MULTI_SZ:
         # data_buf may or may not have a trailing NULL in the buffer.
         if data_size % 2:
@@ -369,10 +377,10 @@ def reg_to_py(data_buf, data_size, typ):
         if len(buf) > data_size:
             buf = buf[:data_size]
         result = []
-        for s in UTF16LE_NULL.split(buf):
+        for s in buf.decode('utf-16-le').split('\0'):
             if s == "":
                 break
-            result.append(s.decode('utf-16-le'))
+            result.append(s)
         return result
     else:
         # Handle REG_BINARY and ALSO handle ALL unknown data types
@@ -380,5 +388,5 @@ def reg_to_py(data_buf, data_size, typ):
         # handle the bits.
         if not data_size:
             return None
-        return str(data_buf[:data_size])
+        return data_buf[:data_size]
 

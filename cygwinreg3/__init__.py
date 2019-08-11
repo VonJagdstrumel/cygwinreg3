@@ -7,7 +7,7 @@
 #
 # It is based on Python's PC/_winreg.c.
 #
-# cygwinreg/__init__.py
+# cygwinreg3/__init__.py
 #
 # Windows Registry access module for Python.
 #
@@ -60,15 +60,13 @@ to see what constants are used, and where.
 """
 
 from ctypes import byref, create_string_buffer, create_unicode_buffer, sizeof
-import errno
 import sys
-from types import NoneType
 
 if sys.platform != 'cygwin':
     raise ImportError('Not running under Cygwin')
 
-from cygwinreg.constants import *
-from cygwinreg.w32api import (wincall, WindowsError,
+from cygwinreg3.constants import *
+from cygwinreg3.w32api import (wincall, WindowsError,
                               DWORD, FILETIME, HKEY, LONG)
 
 class PyHKEY(object):
@@ -96,9 +94,9 @@ class PyHKEY(object):
     slots = ('Close', 'Detach', '__enter__', '__exit__', 'handle')
 
     def __init__(self, hkey, null_ok=False):
-        if isinstance(hkey, (int, long)):
+        if isinstance(hkey, int):
             self.hkey = hkey
-        elif null_ok and isinstance(hkey, NoneType):
+        elif null_ok and hkey is None:
             self.hkey = hkey
         else:
             raise TypeError("A handle must be an integer")
@@ -115,7 +113,7 @@ class PyHKEY(object):
 
         If the handle is already closed, no error is raised.
         """
-        from cygwinreg.w32api import RegCloseKey
+        from cygwinreg3.w32api import RegCloseKey
         wincall(RegCloseKey(self.hkey))
         self.hkey = 0
 
@@ -169,9 +167,9 @@ class PyHKEY(object):
     def make(hkey, null_ok=None):
         if isinstance(hkey, PyHKEY):
             return hkey
-        elif isinstance(hkey, (int, long)):
+        elif isinstance(hkey, int):
             return PyHKEY(hkey)
-        elif null_ok and isinstance(hkey, NoneType):
+        elif null_ok and hkey is None:
             return PyHKEY(None)
         else:
             raise TypeError("A handle must be a HKEY object or an integer")
@@ -196,7 +194,7 @@ def ConnectRegistry(computer_name, key):
     The return value is the handle of the opened key.
     If the function fails, an EnvironmentError exception is raised.
     """
-    from cygwinreg.w32api import RegConnectRegistryW
+    from cygwinreg3.w32api import RegConnectRegistryW
     result = HKEY()
     wincall(RegConnectRegistryW(computer_name, PyHKEY.make(key),
                                 byref(result)))
@@ -215,7 +213,7 @@ def CreateKey(key, sub_key):
     The return value is the handle of the opened key.
     If the function fails, an exception is raised.
     """
-    from cygwinreg.w32api import RegCreateKeyW
+    from cygwinreg3.w32api import RegCreateKeyW
     result = HKEY()
     wincall(RegCreateKeyW(PyHKEY.make(key), sub_key, byref(result)))
     return PyHKEY(result.value)
@@ -232,7 +230,7 @@ def DeleteKey(key, sub_key):
     If the method succeeds, the entire key, including all of its values,
     is removed.  If the method fails, an EnvironmentError exception is raised.
     """
-    from cygwinreg.w32api import RegDeleteKeyW
+    from cygwinreg3.w32api import RegDeleteKeyW
     wincall(RegDeleteKeyW(PyHKEY.make(key), sub_key))
 
 def DeleteValue(key, value):
@@ -241,7 +239,7 @@ def DeleteValue(key, value):
     key is an already open key, or any one of the predefined HKEY_* constants.
     value is a string that identifies the value to remove.
     """
-    from cygwinreg.w32api import RegDeleteValueW
+    from cygwinreg3.w32api import RegDeleteValueW
     wincall(RegDeleteValueW(PyHKEY.make(key), value))
 
 def EnumKey(key, index):
@@ -254,7 +252,7 @@ def EnumKey(key, index):
     It is typically called repeatedly until an EnvironmentError exception is
     raised, indicating no more values are available.
     """
-    from cygwinreg.w32api import RegEnumKeyExW
+    from cygwinreg3.w32api import RegEnumKeyExW
     buf = create_unicode_buffer(256) # max key name length is 255
     length = DWORD(sizeof(buf))
     wincall(RegEnumKeyExW(PyHKEY.make(key), index, buf, byref(length),
@@ -276,7 +274,7 @@ def EnumValue(key, index):
     on the underlying registry type.
     data_type is an integer that identifies the type of the value data.
     """
-    from cygwinreg.w32api import RegQueryInfoKeyW, RegEnumValueW, reg_to_py
+    from cygwinreg3.w32api import RegQueryInfoKeyW, RegEnumValueW, reg_to_py
     hkey = PyHKEY.make(key)
     name_size = DWORD()
     data_size = DWORD()
@@ -306,7 +304,7 @@ def FlushKey(key):
     An application should only call FlushKey() if it requires absolute certainty that registry changes are on disk.
     If you don't know whether a FlushKey() call is required, it probably isn't.
     """
-    from cygwinreg.w32api import RegFlushKey
+    from cygwinreg3.w32api import RegFlushKey
     wincall(RegFlushKey(PyHKEY.make(key)))
 
 def LoadKey(key, sub_key, file_name):
@@ -328,7 +326,7 @@ def LoadKey(key, sub_key, file_name):
 
     The docs imply key must be in the HKEY_USER or HKEY_LOCAL_MACHINE tree
     """
-    from cygwinreg.w32api import RegLoadKeyW
+    from cygwinreg3.w32api import RegLoadKeyW
     wincall(RegLoadKeyW(PyHKEY.make(key), sub_key, file_name))
 
 def OpenKey(key, sub_key, res=0, sam=KEY_READ):
@@ -343,7 +341,7 @@ def OpenKey(key, sub_key, res=0, sam=KEY_READ):
     The result is a new handle to the specified key
     If the function fails, an EnvironmentError exception is raised.
     """
-    from cygwinreg.w32api import RegOpenKeyExW
+    from cygwinreg3.w32api import RegOpenKeyExW
     result = HKEY()
     wincall(RegOpenKeyExW(PyHKEY.make(key), sub_key, res, sam, byref(result)))
     return PyHKEY.make(result.value)
@@ -363,7 +361,7 @@ def QueryInfoKey(key):
     A long integer that identifies when the key was last modified (if available)
     as 100's of nanoseconds since Jan 1, 1600.
     """
-    from cygwinreg.w32api import RegQueryInfoKeyW
+    from cygwinreg3.w32api import RegQueryInfoKeyW
     num_sub_keys = DWORD()
     num_values = DWORD()
     last_write_time = FILETIME()
@@ -386,7 +384,7 @@ def QueryValue(key, sub_key):
     retrieves the data for a key's first value that has a NULL name.
     But the underlying API call doesn't return the type, Lame Lame Lame, DONT USE THIS!!!
     """
-    from cygwinreg.w32api import RegQueryValueW
+    from cygwinreg3.w32api import RegQueryValueW
     hkey = PyHKEY.make(key)
     buf_size = LONG()
     wincall(RegQueryValueW(hkey, sub_key, None, byref(buf_size)))
@@ -400,7 +398,7 @@ def QueryValueEx(key, value_name):
     key is an already open key, or any one of the predefined HKEY_* constants.
     value_name is a string indicating the value to query
     """
-    from cygwinreg.w32api import RegQueryValueExW, reg_to_py
+    from cygwinreg3.w32api import RegQueryValueExW, reg_to_py
     hkey = PyHKEY.make(key)
     buf_size = DWORD()
     wincall(RegQueryValueExW(hkey, value_name, None, None, None,
@@ -427,7 +425,7 @@ def SaveKey(key, file_name):
     The caller of this method must possess the SeBackupPrivilege security privilege.
     This function passes NULL for security_attributes to the API.
     """
-    from cygwinreg.w32api import RegSaveKeyW
+    from cygwinreg3.w32api import RegSaveKeyW
     wincall(RegSaveKeyW(PyHKEY.make(key), file_name, None))
 
 def SetValue(key, sub_key, value_type, value):
@@ -449,9 +447,9 @@ def SetValue(key, sub_key, value_type, value):
     The key identified by the key parameter must have been opened with
     KEY_SET_VALUE access.
     """
-    from cygwinreg.w32api import RegSetValueW
+    from cygwinreg3.w32api import RegSetValueW
     if value_type != REG_SZ:
-        raise TypeError("Type must be cygwinreg.REG_SZ")
+        raise TypeError("Type must be cygwinreg3.REG_SZ")
     value_buf = create_unicode_buffer(value)
     wincall(RegSetValueW(PyHKEY.make(key), sub_key,
                          REG_SZ, value_buf, sizeof(value_buf)))
@@ -488,8 +486,8 @@ def SetValueEx(key, value_name, reserved, value_type, value):
     2048 bytes) should be stored as files with the filenames stored in 
     the configuration registry.  This helps the registry perform efficiently.
     """
-    from cygwinreg.w32api import RegSetValueExW, py_to_reg
+    from cygwinreg3.w32api import RegSetValueExW, py_to_reg
     buf = py_to_reg(value, value_type)
     wincall(RegSetValueExW(PyHKEY.make(key), value_name, 0, value_type,
-                           buf, len(buffer(buf))))
+                           buf, len(memoryview(buf))))
 

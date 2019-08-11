@@ -5,30 +5,23 @@
 #
 # It is based on Python's Lib/test/test_winreg.py.
 #
-# Test the Cygwin specific cygwinreg module.
+# Test the Cygwin specific cygwinreg3 module.
 
-from cygwinreg import *
-import errno, os, re, sys
+from cygwinreg3 import *
+import errno, os, unittest
 
-from test.test_support import verify, have_unicode
-
+ut = unittest.TestCase()
 test_key_name = "SOFTWARE\\Python Registry Test Key - Delete Me"
 
 test_data = [
     ("Int Value",     45,                                      REG_DWORD),
+    ("Long Value",    2**45,                                   REG_QWORD),
     ("String Val",    "A string value",                        REG_SZ),
     ("StringExpand",  "The path is %path%",                    REG_EXPAND_SZ),
     ("Multi-string",  ["Lots", "of", "string", "values"],      REG_MULTI_SZ),
-    ("Raw Data",      ("binary"+chr(0)+"data"),                REG_BINARY),
+    ("Raw Data",      b"binary\0data",                         REG_BINARY),
     ("Big String",    "x"*(2**14-1),                           REG_SZ),
-    ("Big Binary",    "x"*(2**14),                             REG_BINARY),
-]
-if have_unicode:
-    test_data+=[
-    (unicode("Unicode Val"),  unicode("A Unicode value"),                      REG_SZ,),
-    ("UnicodeExpand", unicode("The path is %path%"),                   REG_EXPAND_SZ),
-    ("Multi-unicode", [unicode("Lots"), unicode("of"), unicode("unicode"), unicode("values")], REG_MULTI_SZ),
-    ("Multi-mixed",   [unicode("Unicode"), unicode("and"), "string", "values"],REG_MULTI_SZ),
+    ("Big Binary",    b"x"*(2**14),                            REG_BINARY),
     ]
 
 def WriteTestData(root_key):
@@ -44,11 +37,11 @@ def WriteTestData(root_key):
 
     # Check we wrote as many items as we thought.
     nkeys, nvalues, since_mod = QueryInfoKey(key)
-    verify(nkeys==1, "Not the correct number of sub keys")
-    verify(nvalues==1, "Not the correct number of values")
+    ut.assertEqual(nkeys, 1, "Not the correct number of sub keys")
+    ut.assertEqual(nvalues, 1, "Not the correct number of values")
     nkeys, nvalues, since_mod = QueryInfoKey(sub_key)
-    verify(nkeys==0, "Not the correct number of sub keys")
-    verify(nvalues==len(test_data), "Not the correct number of values")
+    ut.assertEqual(nkeys, 0, "Not the correct number of sub keys")
+    ut.assertEqual(nvalues, len(test_data), "Not the correct number of values")
     # Check that FlushKey doesn't throw exceptions
     FlushKey(sub_key)
     # Close this key this way...
@@ -58,7 +51,7 @@ def WriteTestData(root_key):
     CloseKey(sub_key)
     try:
         QueryInfoKey(int_sub_key)
-        raise RuntimeError, "It appears the CloseKey() function does not close the actual key!"
+        raise RuntimeError("It appears the CloseKey() function does not close the actual key!")
     except EnvironmentError:
         pass
     # ... and close that key that way :-)
@@ -66,29 +59,27 @@ def WriteTestData(root_key):
     key.Close()
     try:
         QueryInfoKey(int_key)
-        raise RuntimeError, "It appears the key.Close() function does not close the actual key!"
+        raise RuntimeError("It appears the key.Close() function does not close the actual key!")
     except EnvironmentError:
         pass
 
 def remove(filename):
     try:
         os.remove(filename)
-    except OSError, e:
-        if OSError.errno == errno.ENOENT:
+    except OSError as e:
+        if e.errno == errno.ENOENT:
             pass                    # Ignore non-existant removal
 
 def BackupTestData(root_key):
     sub_key = OpenKey(OpenKey(root_key, test_key_name), "sub_key")
     # Check that SaveKey and LoadKey don't throw exceptions
-    tempdir = re.sub(r'^\\cygdrive\\(\w)', r'\1:',
-                     os.environ["TEMP"].replace('/', '\\'))
-    tempfile = tempdir + r'\test_reg'
+    tempfile = os.environ["LOCALAPPDATA"] + r'\Temp\test_reg'
     remove(tempfile)
     try:
         SaveKey(sub_key, tempfile)
         try:
             LoadKey(root_key, "sub_key", tempfile)
-        except WindowsError, e:
+        except WindowsError as e:
             if e.winerror == 5:
                 pass                # Needs SE_RESTORE_PRIVILEGE
     finally:
@@ -98,7 +89,7 @@ def BackupTestData(root_key):
 def ReadTestData(root_key):
     # Check we can get default value for this key.
     val = QueryValue(root_key, test_key_name)
-    verify(val=="Default value", "Registry didn't give back the correct value")
+    ut.assertEqual(val, "Default value", "Registry didn't give back the correct value")
 
     key = OpenKey(root_key, test_key_name)
     # Read the sub-keys
@@ -110,21 +101,21 @@ def ReadTestData(root_key):
             data = EnumValue(sub_key, index)
         except EnvironmentError:
             break
-        verify(data in test_data, "Didn't read back the correct test data")
+        ut.assertIn(data, test_data, "Didn't read back the correct test data")
         index = index + 1
-    verify(index==len(test_data), "Didn't read the correct number of items")
+    ut.assertEqual(index, len(test_data), "Didn't read the correct number of items")
     # Check I can directly access each item
     for value_name, value_data, value_type in test_data:
         read_val, read_typ = QueryValueEx(sub_key, value_name)
-        verify(read_val==value_data and read_typ == value_type, \
-                   "Could not directly read the value" )
+        ut.assertEqual(read_val, value_data, "Could not directly read the value" )
+        ut.assertEqual(read_typ, value_type, "Could not directly read the value" )
     sub_key.Close()
     # Enumerate our main key.
     read_val = EnumKey(key, 0)
-    verify(read_val == "sub_key", "Read subkey value wrong")
+    ut.assertEqual(read_val, "sub_key", "Read subkey value wrong")
     try:
         EnumKey(key, 1)
-        verify(0, "Was able to get a second key when I only have one!")
+        ut.fail("Was able to get a second key when I only have one!")
     except EnvironmentError:
         pass
 
@@ -140,14 +131,14 @@ def DeleteTestData(root_key):
         DeleteValue(sub_key, value_name)
 
     nkeys, nvalues, since_mod = QueryInfoKey(sub_key)
-    verify(nkeys==0 and nvalues==0, "subkey not empty before delete")
+    ut.assertEqual(nkeys + nvalues, 0, "subkey not empty before delete")
     sub_key.Close()
     DeleteKey(key, "sub_key")
 
     try:
         # Shouldnt be able to delete it twice!
         DeleteKey(key, "sub_key")
-        verify(0, "Deleting the key twice succeeded")
+        ut.fail("Deleting the key twice succeeded")
     except EnvironmentError:
         pass
     key.Close()
@@ -155,7 +146,7 @@ def DeleteTestData(root_key):
     # Opening should now fail!
     try:
         key = OpenKey(root_key, test_key_name)
-        verify(0, "Could open the non-existent key")
+        ut.fail("Could open the non-existent key")
     except WindowsError: # Use this error name this time
         pass
 
@@ -164,27 +155,8 @@ def TestAll(root_key):
     BackupTestData(root_key)
     ReadTestData(root_key)
     DeleteTestData(root_key)
+    ConnectRegistry(None, root_key).Close()
 
-# Test on my local machine.
-TestAll(HKEY_CURRENT_USER)
-print "Local registry tests worked"
-try:
-    remote_name = sys.argv[sys.argv.index("--remote")+1]
-except (IndexError, ValueError):
-    remote_name = None
 
-if remote_name is not None:
-    try:
-        remote_key = ConnectRegistry(remote_name, HKEY_CURRENT_USER)
-    except EnvironmentError, exc:
-        print "Could not connect to the remote machine -", exc.strerror
-        remote_key = None
-    if remote_key is not None:
-        TestAll(remote_key)
-        print "Remote registry tests worked"
-else:
-    print "Remote registry calls can be tested using",
-    print "'test_cygwinreg.py --remote \\\\machine_name'"
-    # perform minimal ConnectRegistry test which just invokes it
-    h = ConnectRegistry(None, HKEY_LOCAL_MACHINE)
-    h.Close()
+test = unittest.FunctionTestCase(lambda: TestAll(HKEY_CURRENT_USER))
+unittest.TextTestRunner().run(test)
