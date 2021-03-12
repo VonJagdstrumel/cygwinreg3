@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 #
 # Copyright (C) 2009 Akoha. Written by Simon Law <sfllaw@sfllaw.ca>
-# 
+# Copyright (C) 2021 Steve Forget
+#
 # This software is licensed under the same terms and conditions as
 # Python itself. See the file LICENSE.txt for more details.
 #
@@ -18,34 +19,16 @@ from struct import pack, unpack_from
 
 from cygwinreg3.constants import *
 
-from ctypes import (byref, cast, POINTER, sizeof, Structure,
+from ctypes import (byref, cast, sizeof, cdll,
                     create_string_buffer,
-                    c_char_p, c_int, c_ulong, c_uint, c_void_p, c_wchar_p, c_longlong)
+                    c_void_p, c_longlong)
 
-PCVOID = c_void_p
-LPCVOID = PCVOID
-DWORD = c_uint
-PDWORD = POINTER(DWORD)
-LPDWORD = PDWORD
+from ctypes.wintypes import (LPVOID, LPCVOID, DWORD, PDWORD, LPDWORD, LONG,
+                             PLONG, PBYTE, LPBYTE, LPWSTR, LPCWSTR, HKEY,
+                             PHKEY, HLOCAL, PFILETIME)
+
 QWORD = c_longlong
-LONG = c_int
-PLONG = POINTER(LONG)
-PBYTE = c_char_p
-LPBYTE = PBYTE
-LPWSTR = c_wchar_p
-LPCWSTR = LPWSTR
-HANDLE = c_ulong # in the header files: void *
-HKEY = HANDLE
-PHKEY = POINTER(HKEY)
-HLOCAL = c_void_p
-REGSAM = c_ulong
-
-class FILETIME(Structure):
-    _fields_ = [("low", DWORD),
-                ("high", DWORD)]
-PFILETIME = POINTER(FILETIME)
-
-from ctypes import cdll
+REGSAM = DWORD
 
 cdll.kernel32 = cdll.LoadLibrary('kernel32.dll')
 cdll.advapi32 = cdll.LoadLibrary('advapi32.dll')
@@ -54,8 +37,8 @@ cdll.advapi32 = cdll.LoadLibrary('advapi32.dll')
 #                                        va_list*)
 FormatMessageW = cdll.kernel32.FormatMessageW
 FormatMessageW.restype = DWORD
-FormatMessageW.argtypes = [DWORD, LPCVOID, DWORD, DWORD, PCVOID, DWORD,
-                           c_void_p]
+FormatMessageW.argtypes = [DWORD, LPCVOID, DWORD, DWORD, LPVOID, DWORD,
+                           LPVOID]
 
 # WINBASEAPI DWORD WINAPI GetLastError(void);
 GetLastError = cdll.kernel32.GetLastError
@@ -227,19 +210,22 @@ _winerror_to_errno = {2: 2,
                       206: 2,
                       215: 11,
                       1816: 12}
+
+
 def winerror_to_errno(winerror):
     from errno import EINVAL
     return _winerror_to_errno.get(winerror, EINVAL)
+
 
 def winerror_to_strerror(winerror):
     # buf is actually a string, but is initially set to NULL
     buf = c_void_p(None)
     len = FormatMessageW(
         # Error API error
-        (FORMAT_MESSAGE_ALLOCATE_BUFFER |
-         FORMAT_MESSAGE_FROM_SYSTEM |
-         FORMAT_MESSAGE_IGNORE_INSERTS),
-        None,                   # no message source 
+        (FORMAT_MESSAGE_ALLOCATE_BUFFER
+         | FORMAT_MESSAGE_FROM_SYSTEM
+         | FORMAT_MESSAGE_IGNORE_INSERTS),
+        None,                   # no message source
         DWORD(winerror),
         LANG_NEUTRAL,           # Default language
         byref(buf),
@@ -254,6 +240,7 @@ def winerror_to_strerror(winerror):
     # remove trailing cr/lf and dots
     return re.sub(r'[\s.]*$', '', result)
 
+
 def wincall(return_code):
     from cygwinreg3.constants import ERROR_SUCCESS
     if not isinstance(return_code, int):
@@ -264,6 +251,8 @@ def wincall(return_code):
 
 # We need to provide our own copy of exceptions.Windowsrror, since
 # Python under Cygwin doesn't have a WindowsError.
+
+
 class WindowsError(OSError):
     def __init__(self, winerror, strerror=None, filename=None):
         if winerror == 0:
@@ -283,6 +272,7 @@ class WindowsError(OSError):
         else:
             return "[Error %s] %s" % (self.winerror, self.strerror)
 
+
 def py_to_reg(value, typ):
     """Convert a Python object to Registry data.
 
@@ -293,7 +283,6 @@ def py_to_reg(value, typ):
             basestring = basestring.decode(getpreferredencoding())
         return basestring.encode('utf-16-le')
 
-    exception = ValueError("Could not convert the data to the specified type.")
     if typ == REG_DWORD:
         if value is None:
             buf = create_string_buffer(pack('=L', 0), sizeof(DWORD))
@@ -325,7 +314,7 @@ def py_to_reg(value, typ):
                 elem = u''
             result.append(utf16(elem))
             count += 1
-        result.append(utf16(u'')) # Terminate the list with an empty string
+        result.append(utf16(u''))  # Terminate the list with an empty string
         result = b'\x00\x00'.join(result)
         buf = create_string_buffer(result, len(result))
     else:
@@ -341,6 +330,7 @@ def py_to_reg(value, typ):
             raise TypeError("Objects of type '%s' can not be used as "
                             "binary registry values" % type(value))
     return buf
+
 
 def reg_to_py(data_buf, data_size, typ):
     """Convert Registry data to a Python object."""
@@ -373,7 +363,7 @@ def reg_to_py(data_buf, data_size, typ):
         # packages install strings which dont conform, causing this
         # code to fail - however, "regedit" etc still work with these
         # strings (ie only we dont!).
-        buf = data_buf.raw 
+        buf = data_buf.raw
         if len(buf) > data_size:
             buf = buf[:data_size]
         result = []
@@ -389,4 +379,3 @@ def reg_to_py(data_buf, data_size, typ):
         if not data_size:
             return None
         return data_buf[:data_size]
-

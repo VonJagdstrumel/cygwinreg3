@@ -2,7 +2,8 @@
 # -*- coding: utf-8 -*-
 #
 # Copyright (C) 2009 Akoha. Written by Simon Law <sfllaw@sfllaw.ca>
-# 
+# Copyright (C) 2021 Steve Forget
+#
 # This software is licensed under the same terms and conditions as
 # Python itself. See the file LICENSE.txt for more details.
 
@@ -23,7 +24,7 @@ setup(name='cygwinreg3',
       author='Simon Law',
       author_email='sfllaw@sfllaw.ca',
       maintainer='Steve Forget',
-      url='http://bitbucket.org/sfllaw/cygwinreg3/',
+      url='https://github.com/VonJagdstrumel/cygwinreg3/',
       license='Python Software Foundation License',
       platforms=['Cygwin'],
       classifiers=[
@@ -37,6 +38,3 @@ setup(name='cygwinreg3',
         'Topic :: Software Development',
         ],
       )
-
-
-

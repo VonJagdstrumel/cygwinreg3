@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 #
 # Copyright (C) 2009 Akoha. Written by Simon Law <sfllaw@sfllaw.ca>
-# 
+# Copyright (C) 2021 Steve Forget
+#
 # This software is licensed under the same terms and conditions as
 # Python itself. See the file LICENSE.txt for more details.
 #
@@ -59,15 +60,17 @@ Many constants are defined - see the documentation for each function
 to see what constants are used, and where.
 """
 
-from ctypes import byref, create_string_buffer, create_unicode_buffer, sizeof
+from ctypes import (byref, create_string_buffer,
+                    create_unicode_buffer, sizeof, cast)
+from ctypes.wintypes import HKEY, DWORD, FILETIME, LONG, LPBYTE
 import sys
 
 if sys.platform != 'cygwin':
     raise ImportError('Not running under Cygwin')
 
-from cygwinreg3.constants import *
-from cygwinreg3.w32api import (wincall, WindowsError,
-                              DWORD, FILETIME, HKEY, LONG)
+from cygwinreg3.constants import KEY_READ, REG_SZ
+from cygwinreg3.w32api import wincall, WindowsError
+
 
 class PyHKEY(object):
     """PyHKEY Object - A Python object, representing a win32 registry key.
@@ -76,7 +79,7 @@ class PyHKEY(object):
     the object is destroyed.  To guarantee cleanup, you can call either
     the Close() method on the PyHKEY, or the CloseKey() method.
 
-    All functions which accept a handle object also accept an integer - 
+    All functions which accept a handle object also accept an integer -
     however, use of the handle object is encouraged.
 
     Functions:
@@ -105,7 +108,7 @@ class PyHKEY(object):
         if self.hkey:
             try:
                 self.Close()
-            except:
+            except WindowsError:
                 pass
 
     def Close(self):
@@ -140,7 +143,7 @@ class PyHKEY(object):
     def __enter__(self):
         return self
 
-    def __exit__(*exc_info):
+    def __exit__(self, *exc_info):
         self.Close()
         return False
 
@@ -174,6 +177,7 @@ class PyHKEY(object):
         else:
             raise TypeError("A handle must be a HKEY object or an integer")
 
+
 def CloseKey(hkey):
     """CloseKey(hkey) - Closes a previously opened registry key.
 
@@ -183,6 +187,7 @@ def CloseKey(hkey):
     closed when the hkey object is destroyed by Python.
     """
     PyHKEY.make(hkey).Close()
+
 
 def ConnectRegistry(computer_name, key):
     """key = ConnectRegistry(computer_name, key) - Establishes a connection to a predefined registry handle on another computer.
@@ -199,6 +204,7 @@ def ConnectRegistry(computer_name, key):
     wincall(RegConnectRegistryW(computer_name, PyHKEY.make(key),
                                 byref(result)))
     return PyHKEY(result.value)
+
 
 def CreateKey(key, sub_key):
     """key = CreateKey(key, sub_key) - Creates or opens the specified key.
@@ -218,6 +224,7 @@ def CreateKey(key, sub_key):
     wincall(RegCreateKeyW(PyHKEY.make(key), sub_key, byref(result)))
     return PyHKEY(result.value)
 
+
 def DeleteKey(key, sub_key):
     """DeleteKey(key, sub_key) - Deletes the specified key.
 
@@ -233,6 +240,7 @@ def DeleteKey(key, sub_key):
     from cygwinreg3.w32api import RegDeleteKeyW
     wincall(RegDeleteKeyW(PyHKEY.make(key), sub_key))
 
+
 def DeleteValue(key, value):
     """DeleteValue(key, value) - Removes a named value from a registry key.
 
@@ -241,6 +249,7 @@ def DeleteValue(key, value):
     """
     from cygwinreg3.w32api import RegDeleteValueW
     wincall(RegDeleteValueW(PyHKEY.make(key), value))
+
 
 def EnumKey(key, index):
     """string = EnumKey(key, index) - Enumerates subkeys of an open registry key.
@@ -253,11 +262,12 @@ def EnumKey(key, index):
     raised, indicating no more values are available.
     """
     from cygwinreg3.w32api import RegEnumKeyExW
-    buf = create_unicode_buffer(256) # max key name length is 255
+    buf = create_unicode_buffer(256)  # max key name length is 255
     length = DWORD(sizeof(buf))
     wincall(RegEnumKeyExW(PyHKEY.make(key), index, buf, byref(length),
                           None, None, None, None))
     return buf[:length.value]
+
 
 def EnumValue(key, index):
     """tuple = EnumValue(key, index) - Enumerates values of an open registry key.
@@ -286,10 +296,12 @@ def EnumValue(key, index):
     data_buf = create_string_buffer(data_size.value)
     typ = DWORD()
     wincall(RegEnumValueW(hkey, index, name_buf, byref(name_size), None,
-                          byref(typ), data_buf, byref(data_size)))
+                          byref(typ), cast(data_buf, LPBYTE),
+                          byref(data_size)))
     return (name_buf[:name_size.value],
             reg_to_py(data_buf, data_size, typ),
             typ.value)
+
 
 def FlushKey(key):
     """FlushKey(key) - Writes all the attributes of a key to the registry.
@@ -306,6 +318,7 @@ def FlushKey(key):
     """
     from cygwinreg3.w32api import RegFlushKey
     wincall(RegFlushKey(PyHKEY.make(key)))
+
 
 def LoadKey(key, sub_key, file_name):
     """LoadKey(key, sub_key, file_name) - Creates a subkey under the specified key
@@ -329,6 +342,7 @@ def LoadKey(key, sub_key, file_name):
     from cygwinreg3.w32api import RegLoadKeyW
     wincall(RegLoadKeyW(PyHKEY.make(key), sub_key, file_name))
 
+
 def OpenKey(key, sub_key, res=0, sam=KEY_READ):
     """key = OpenKey(key, sub_key, res = 0, sam = KEY_READ) - Opens the specified key.
 
@@ -346,9 +360,11 @@ def OpenKey(key, sub_key, res=0, sam=KEY_READ):
     wincall(RegOpenKeyExW(PyHKEY.make(key), sub_key, res, sam, byref(result)))
     return PyHKEY.make(result.value)
 
+
 def OpenKeyEx(key, sub_key, res=0, sam=KEY_READ):
     """See OpenKey()"""
     return OpenKey(key, sub_key, res, sam)
+
 
 def QueryInfoKey(key):
     """tuple = QueryInfoKey(key) - Returns information about a key.
@@ -369,8 +385,10 @@ def QueryInfoKey(key):
                              byref(num_sub_keys), None, None,
                              byref(num_values),  None,  None, None,
                              byref(last_write_time)))
-    last_write_time = (last_write_time.high << 32 | last_write_time.low)
+    last_write_time = (last_write_time.dwHighDateTime << 32
+                       | last_write_time.dwLowDateTime)
     return (num_sub_keys.value, num_values.value, last_write_time)
+
 
 def QueryValue(key, sub_key):
     """string = QueryValue(key, sub_key) - retrieves the unnamed value for a key.
@@ -392,6 +410,7 @@ def QueryValue(key, sub_key):
     wincall(RegQueryValueW(hkey, sub_key, buf, byref(buf_size)))
     return buf.value
 
+
 def QueryValueEx(key, value_name):
     """value,type_id = QueryValueEx(key, value_name) - Retrieves the type and data for a specified value name associated with an open registry key.
 
@@ -406,10 +425,11 @@ def QueryValueEx(key, value_name):
     # buf is a byte array
     buf = create_string_buffer(buf_size.value)
     typ = DWORD()
-    wincall(RegQueryValueExW(hkey, value_name, None, byref(typ), buf,
-                             byref(buf_size)))
+    wincall(RegQueryValueExW(hkey, value_name, None, byref(typ),
+                             cast(buf, LPBYTE), byref(buf_size)))
     return (reg_to_py(buf, buf_size, typ),
             typ.value)
+
 
 def SaveKey(key, file_name):
     """SaveKey(key, file_name) - Saves the specified key, and all its subkeys to the specified file.
@@ -428,6 +448,7 @@ def SaveKey(key, file_name):
     from cygwinreg3.w32api import RegSaveKeyW
     wincall(RegSaveKeyW(PyHKEY.make(key), file_name, None))
 
+
 def SetValue(key, sub_key, value_type, value):
     """SetValue(key, sub_key, value_type, value) - Associates a value with a specified key.
 
@@ -441,7 +462,7 @@ def SetValue(key, sub_key, value_type, value):
     function creates it.
 
     Value lengths are limited by available memory. Long values (more than
-    2048 bytes) should be stored as files with the filenames stored in 
+    2048 bytes) should be stored as files with the filenames stored in
     the configuration registry.  This helps the registry perform efficiently.
 
     The key identified by the key parameter must have been opened with
@@ -453,6 +474,7 @@ def SetValue(key, sub_key, value_type, value):
     value_buf = create_unicode_buffer(value)
     wincall(RegSetValueW(PyHKEY.make(key), sub_key,
                          REG_SZ, value_buf, sizeof(value_buf)))
+
 
 def SetValueEx(key, value_name, reserved, value_type, value):
     """SetValueEx(key, value_name, reserved, value_type, value) - Stores data in the value field of an open registry key.
@@ -483,11 +505,10 @@ def SetValueEx(key, value_name, reserved, value_type, value):
     To open the key, use the CreateKeyEx() or OpenKeyEx() methods.
 
     Value lengths are limited by available memory. Long values (more than
-    2048 bytes) should be stored as files with the filenames stored in 
+    2048 bytes) should be stored as files with the filenames stored in
     the configuration registry.  This helps the registry perform efficiently.
     """
     from cygwinreg3.w32api import RegSetValueExW, py_to_reg
     buf = py_to_reg(value, value_type)
     wincall(RegSetValueExW(PyHKEY.make(key), value_name, 0, value_type,
-                           buf, len(memoryview(buf))))
-
+                           cast(buf, LPBYTE), len(memoryview(buf))))

@@ -8,21 +8,25 @@
 # Test the Cygwin specific cygwinreg3 module.
 
 from cygwinreg3 import *
-import errno, os, unittest
+from cygwinreg3.constants import *
+import errno
+import os
+import unittest
 
 ut = unittest.TestCase()
 test_key_name = "SOFTWARE\\Python Registry Test Key - Delete Me"
 
 test_data = [
-    ("Int Value",     45,                                      REG_DWORD),
-    ("Long Value",    2**45,                                   REG_QWORD),
-    ("String Val",    "A string value",                        REG_SZ),
-    ("StringExpand",  "The path is %path%",                    REG_EXPAND_SZ),
-    ("Multi-string",  ["Lots", "of", "string", "values"],      REG_MULTI_SZ),
-    ("Raw Data",      b"binary\0data",                         REG_BINARY),
-    ("Big String",    "x"*(2**14-1),                           REG_SZ),
-    ("Big Binary",    b"x"*(2**14),                            REG_BINARY),
+    ("Int Value",    45,                                 REG_DWORD),
+    ("Long Value",   2**45,                              REG_QWORD),
+    ("String Val",   "A string value",                   REG_SZ),
+    ("StringExpand", "The path is %path%",               REG_EXPAND_SZ),
+    ("Multi-string", ["Lots", "of", "string", "values"], REG_MULTI_SZ),
+    ("Raw Data",     b"binary\0data",                    REG_BINARY),
+    ("Big String",   "x"*(2**14-1),                      REG_SZ),
+    ("Big Binary",   b"x"*(2**14),                       REG_BINARY),
     ]
+
 
 def WriteTestData(root_key):
     # Set the default value for this key.
@@ -51,7 +55,8 @@ def WriteTestData(root_key):
     CloseKey(sub_key)
     try:
         QueryInfoKey(int_sub_key)
-        raise RuntimeError("It appears the CloseKey() function does not close the actual key!")
+        raise RuntimeError(
+            "It appears the CloseKey() function does not close the actual key!")
     except EnvironmentError:
         pass
     # ... and close that key that way :-)
@@ -59,9 +64,11 @@ def WriteTestData(root_key):
     key.Close()
     try:
         QueryInfoKey(int_key)
-        raise RuntimeError("It appears the key.Close() function does not close the actual key!")
+        raise RuntimeError(
+            "It appears the key.Close() function does not close the actual key!")
     except EnvironmentError:
         pass
+
 
 def remove(filename):
     try:
@@ -69,6 +76,7 @@ def remove(filename):
     except OSError as e:
         if e.errno == errno.ENOENT:
             pass                    # Ignore non-existant removal
+
 
 def BackupTestData(root_key):
     sub_key = OpenKey(OpenKey(root_key, test_key_name), "sub_key")
@@ -89,7 +97,8 @@ def BackupTestData(root_key):
 def ReadTestData(root_key):
     # Check we can get default value for this key.
     val = QueryValue(root_key, test_key_name)
-    ut.assertEqual(val, "Default value", "Registry didn't give back the correct value")
+    ut.assertEqual(val, "Default value",
+                   "Registry didn't give back the correct value")
 
     key = OpenKey(root_key, test_key_name)
     # Read the sub-keys
@@ -103,12 +112,15 @@ def ReadTestData(root_key):
             break
         ut.assertIn(data, test_data, "Didn't read back the correct test data")
         index = index + 1
-    ut.assertEqual(index, len(test_data), "Didn't read the correct number of items")
+    ut.assertEqual(index, len(test_data),
+                   "Didn't read the correct number of items")
     # Check I can directly access each item
     for value_name, value_data, value_type in test_data:
         read_val, read_typ = QueryValueEx(sub_key, value_name)
-        ut.assertEqual(read_val, value_data, "Could not directly read the value" )
-        ut.assertEqual(read_typ, value_type, "Could not directly read the value" )
+        ut.assertEqual(read_val, value_data,
+                       "Could not directly read the value")
+        ut.assertEqual(read_typ, value_type,
+                       "Could not directly read the value")
     sub_key.Close()
     # Enumerate our main key.
     read_val = EnumKey(key, 0)
@@ -120,6 +132,7 @@ def ReadTestData(root_key):
         pass
 
     key.Close()
+
 
 def DeleteTestData(root_key):
     key = OpenKey(root_key, test_key_name, 0, KEY_ALL_ACCESS)
@@ -147,8 +160,9 @@ def DeleteTestData(root_key):
     try:
         key = OpenKey(root_key, test_key_name)
         ut.fail("Could open the non-existent key")
-    except WindowsError: # Use this error name this time
+    except WindowsError:  # Use this error name this time
         pass
+
 
 def TestAll(root_key):
     WriteTestData(root_key)
