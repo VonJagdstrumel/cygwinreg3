@@ -7,7 +7,27 @@
 # This software is licensed under the same terms and conditions as
 # Python itself. See the file LICENSE.txt for more details.
 
-from setuptools import setup
+from setuptools import setup, Command
+from distutils.spawn import spawn
+import sys
+
+
+class test(Command):
+    description = "run tests"
+
+    user_options = []
+
+    def initialize_options(self):
+        self.tests = None
+
+    def finalize_options(self):
+        if self.tests is None:
+            self.tests = ['test.test_cygwinreg3']
+
+    def run(self):
+        for test in self.tests:
+            spawn([sys.executable, '-m', test], search_path=False)
+
 
 LONG_DESCRIPTION = """cygwinreg3 is a direct Cygwin port of Python's winreg.
 
@@ -17,7 +37,7 @@ in Cygwin read and write to the Windows registry.
 """
 
 setup(name='cygwinreg3',
-      version='1.0',
+      version='1.1',
       packages=['cygwinreg3'],
       description='Windows registry access for the Cygwin toolkit',
       long_description=LONG_DESCRIPTION,
@@ -37,4 +57,5 @@ setup(name='cygwinreg3',
         'Programming Language :: Python',
         'Topic :: Software Development',
         ],
+      cmdclass={'test': test},
       )
