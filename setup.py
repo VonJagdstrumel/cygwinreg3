@@ -37,7 +37,7 @@ in Cygwin read and write to the Windows registry.
 """
 
 setup(name='cygwinreg3',
-      version='1.1',
+      version='1.2',
       packages=['cygwinreg3'],
       description='Windows registry access for the Cygwin toolkit',
       long_description=LONG_DESCRIPTION,
@@ -47,6 +47,7 @@ setup(name='cygwinreg3',
       url='https://github.com/VonJagdstrumel/cygwinreg3/',
       license='Python Software Foundation License',
       platforms=['Cygwin'],
+      python_requires='>=3.6',
       classifiers=[
         'Development Status :: 5 - Production/Stable',
         'Environment :: Win32 (MS Windows)',

@@ -72,7 +72,7 @@ from cygwinreg3.constants import KEY_READ, REG_SZ
 from cygwinreg3.w32api import wincall, WindowsError
 
 
-class PyHKEY(object):
+class PyHKEY():
     """PyHKEY Object - A Python object, representing a win32 registry key.
 
     This object wraps a Windows HKEY object, automatically closing it when
@@ -94,7 +94,7 @@ class PyHKEY(object):
     __int__ - Converting a handle to an integer returns the Win32 handle.
     __cmp__ - Handle objects are compared using the handle value.
     """
-    slots = ('Close', 'Detach', '__enter__', '__exit__', 'handle')
+    __slots__ = ('hkey')
 
     def __init__(self, hkey, null_ok=False):
         if isinstance(hkey, int):
@@ -136,9 +136,9 @@ class PyHKEY(object):
         self.hkey = 0
         return hkey
 
-    def _handle(self):
+    @property
+    def handle(self):
         return self.hkey
-    handle = property(_handle)
 
     def __enter__(self):
         return self
